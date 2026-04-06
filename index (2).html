@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ClipSnap" />
+  <meta name="description" content="Instant clipboard snippets — copy and move on." />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <title>ClipSnap</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #07070d;
+      --surface: #0f0f1a;
+      --border: rgba(255,255,255,0.07);
+      --accent: #c8ff00;
+      --accent2: #ff4ecd;
+      --txt: #e8e8f0;
+      --txt-dim: rgba(232,232,240,0.38);
+      --mono: 'DM Mono', monospace;
+      --display: 'Bebas Neue', sans-serif;
+      --radius: 16px;
+      --glow: 0 0 40px rgba(200,255,0,0.18);
+    }
+
+    html, body {
+      height: 100%; width: 100%;
+      background: var(--bg);
+      color: var(--txt);
+      font-family: var(--mono);
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    /* Animated bg grid */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(200,255,0,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(200,255,0,0.025) 1px, transparent 1px);
+      background-size: 48px 48px;
+      animation: gridDrift 30s linear infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes gridDrift {
+      from { background-position: 0 0; }
+      to   { background-position: 48px 48px; }
+    }
+
+    /* Radial glow orb */
+    body::after {
+      content: '';
+      position: fixed;
+      width: 600px; height: 600px;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -55%);
+      background: radial-gradient(circle, rgba(200,255,0,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+      animation: orbPulse 6s ease-in-out infinite;
+    }
+
+    @keyframes orbPulse {
+      0%,100% { opacity: 0.7; transform: translate(-50%,-55%) scale(1); }
+      50%      { opacity: 1;   transform: translate(-50%,-55%) scale(1.12); }
+    }
+
+    /* ── LAYOUT ── */
+    #app {
+      position: relative; z-index: 1;
+      height: 100%; width: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 24px;
+      gap: 0;
+    }
+
+    /* Header */
+    .header {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: 20px 28px 0;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .logo {
+      font-family: var(--display);
+      font-size: clamp(22px, 5vw, 30px);
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      text-shadow: 0 0 20px rgba(200,255,0,0.5);
+    }
+
+    .counter-pill {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--txt-dim);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 99px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .counter-pill span { color: var(--accent); font-weight: 500; }
+
+    /* ── CARD ── */
+    .card {
+      position: relative;
+      width: 100%;
+      max-width: 520px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 36px 28px;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 28px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(200,255,0,0.04),
+        0 24px 80px rgba(0,0,0,0.6),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    /* Top accent bar */
+    .card::before {
+      content: '';
+      position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.6;
+    }
+
+    /* Shimmer overlay during transition */
+    .card-shimmer {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, transparent 40%, rgba(200,255,0,0.05) 50%, transparent 60%);
+      background-size: 200% 200%;
+      border-radius: var(--radius);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .card.copying .card-shimmer {
+      opacity: 1;
+      animation: shimmerSweep 0.6s ease-out forwards;
+    }
+    @keyframes shimmerSweep {
+      0%   { background-position: 200% 0; opacity: 1; }
+      100% { background-position: -200% 0; opacity: 0; }
+    }
+
+    /* Category tag */
+    .tag {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      background: rgba(255,78,205,0.08);
+      border: 1px solid rgba(255,78,205,0.2);
+      padding: 4px 12px;
+      border-radius: 99px;
+      transition: all 0.4s ease;
+    }
+
+    /* TEXT display */
+    .text-wrap {
+      width: 100%; text-align: center;
+      min-height: 64px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    #clip-text {
+      font-family: var(--mono);
+      font-size: clamp(15px, 3.8vw, 22px);
+      font-weight: 400;
+      line-height: 1.5;
+      color: var(--txt);
+      letter-spacing: 0.015em;
+      word-break: break-word;
+      transition: none;
+    }
+
+    /* Character-level fade animation */
+    #clip-text .char {
+      display: inline;
+      opacity: 0;
+      animation: charFadeIn 0.03s forwards;
+    }
+    @keyframes charFadeIn {
+      to { opacity: 1; }
+    }
+
+    /* Exiting text */
+    .text-exiting {
+      animation: textSlideOut 0.28s cubic-bezier(0.4,0,1,1) forwards !important;
+    }
+    @keyframes textSlideOut {
+      0%   { opacity:1; transform: translateY(0) scale(1); filter: blur(0); }
+      100% { opacity:0; transform: translateY(-18px) scale(0.97); filter: blur(4px); }
+    }
+
+    /* Copy Button */
+    .copy-btn {
+      position: relative;
+      width: 100%;
+      max-width: 280px;
+      height: 52px;
+      background: var(--accent);
+      color: #07070d;
+      border: none; cursor: pointer;
+      border-radius: 12px;
+      font-family: var(--display);
+      font-size: 20px;
+      letter-spacing: 0.15em;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: transform 0.12s, box-shadow 0.12s, background 0.15s;
+      box-shadow: 0 4px 24px rgba(200,255,0,0.25), 0 0 0 0 rgba(200,255,0,0.4);
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+      overflow: hidden;
+    }
+
+    .copy-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(200,255,0,0.35), 0 0 0 0 rgba(200,255,0,0.4);
+    }
+
+    .copy-btn:active {
+      transform: scale(0.96);
+      box-shadow: 0 2px 12px rgba(200,255,0,0.2);
+    }
+
+    .copy-btn.success {
+      background: #00e5a0;
+      box-shadow: 0 4px 24px rgba(0,229,160,0.35);
+      animation: btnPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes btnPop {
+      0%   { transform: scale(0.94); }
+      60%  { transform: scale(1.04); }
+      100% { transform: scale(1); }
+    }
+
+    /* Ripple */
+    .copy-btn .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.35);
+      transform: scale(0);
+      animation: rippleAnim 0.55s linear;
+      pointer-events: none;
+    }
+    @keyframes rippleAnim {
+      to { transform: scale(4); opacity: 0; }
+    }
+
+    .btn-icon { font-size: 18px; transition: transform 0.3s; }
+    .copy-btn.success .btn-icon { transform: scale(1.2) rotate(5deg); }
+    .btn-label { transition: opacity 0.2s; }
+
+    /* Progress bar */
+    .progress-bar {
+      width: 100%;
+      height: 3px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-top: -8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 99px;
+      transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+      box-shadow: 0 0 8px rgba(200,255,0,0.5);
+    }
+
+    /* Footer hint */
+    .hint {
+      font-size: 11px;
+      color: var(--txt-dim);
+      letter-spacing: 0.08em;
+      text-align: center;
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 32px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #00e5a0;
+      color: #07070d;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      padding: 10px 22px;
+      border-radius: 99px;
+      opacity: 0;
+      transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 999;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Floating particles on copy */
+    .particle {
+      position: fixed;
+      pointer-events: none;
+      font-size: 14px;
+      animation: particleFly 1s ease-out forwards;
+      z-index: 500;
+    }
+    @keyframes particleFly {
+      0%   { opacity:1; transform: translate(0,0) scale(1); }
+      100% { opacity:0; transform: translate(var(--dx), var(--dy)) scale(0.3); }
+    }
+
+    /* Skip button */
+    .skip-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--txt-dim);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      padding: 6px 16px;
+      border-radius: 99px;
+      cursor: pointer;
+      transition: all 0.2s;
+      outline: none;
+    }
+    .skip-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--txt); }
+
+    /* PWA install banner */
+    #install-banner {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%) translateY(120px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      display: flex; align-items: center; gap: 14px;
+      font-size: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 100;
+      max-width: 340px; width: calc(100% - 40px);
+    }
+    #install-banner.show { transform: translateX(-50%) translateY(0); }
+    #install-banner .install-text { flex:1; color: var(--txt-dim); line-height: 1.4; }
+    #install-banner .install-text strong { color: var(--txt); display:block; margin-bottom:2px; }
+    #install-btn {
+      background: var(--accent); color: #07070d;
+      border: none; padding: 8px 16px; border-radius: 8px;
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      cursor: pointer; white-space: nowrap;
+    }
+    #dismiss-install {
+      background: none; border: none; color: var(--txt-dim);
+      font-size: 18px; cursor: pointer; padding: 0 4px; line-height:1;
+    }
+
+    /* Keyboard shortcut badge */
+    .kbd {
+      display: inline-flex; align-items:center; gap: 2px;
+      font-size: 10px; color: var(--txt-dim);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 4px; padding: 2px 6px;
+    }
+
+    /* split-screen friendly: portrait compact mode */
+    @media (max-height: 420px) {
+      .card { padding: 20px 24px 16px; gap: 16px; }
+      .header { padding: 12px 20px 0; }
+      .copy-btn { height: 44px; font-size: 17px; max-width: 240px; }
+      .hint { display: none; }
+      #clip-text { font-size: clamp(13px, 3.5vw, 17px); }
+      .text-wrap { min-height: 44px; }
+      .progress-bar { margin-top: -4px; }
+    }
+
+    @media (max-width: 380px) {
+      .card { padding: 28px 22px 22px; }
+      #clip-text { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <header class="header">
+    <div class="logo">CLIPSNAP</div>
+    <div class="counter-pill">
+      <span id="done-count">0</span> / <span id="total-count">10000</span> copied
+    </div>
+  </header>
+
+  <div class="card" id="card">
+    <div class="card-shimmer"></div>
+
+    <div class="tag" id="category-tag">WORD</div>
+
+    <div class="text-wrap">
+      <div id="clip-text"></div>
+    </div>
+
+    <button class="copy-btn" id="copy-btn" aria-label="Copy to clipboard">
+      <span class="btn-icon" id="btn-icon">⎘</span>
+      <span class="btn-label" id="btn-label">COPY</span>
+    </button>
+
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="skip-btn" id="skip-btn">↻ Skip</button>
+      <div class="hint">
+        <span class="kbd">Space</span> or <span class="kbd">C</span> to copy
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast">✓ Copied!</div>
+<div id="install-banner">
+  <div class="install-text">
+    <strong>Install ClipSnap</strong>
+    Add to home screen for quick access
+  </div>
+  <button id="install-btn">Install</button>
+  <button id="dismiss-install">×</button>
+</div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+</script>
+<script src="data.js"></script>
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  const STORAGE_KEY = 'clipsnap_state_v2';
+
+  function loadState() {
+    try {
+      const s = localStorage.getItem(STORAGE_KEY);
+      if (s) return JSON.parse(s);
+    } catch(e) {}
+    return { usedIndices: [], currentIndex: -1, doneCount: 0 };
+  }
+
+  function saveState(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+  }
+
+  let state = loadState();
+  let allItems = window.CLIP_DATA || [];
+  const TOTAL = allItems.length;
+
+  // Build shuffled queue from unused items
+  let queue = [];
+  function buildQueue() {
+    const usedSet = new Set(state.usedIndices);
+    queue = [];
+    for (let i = 0; i < TOTAL; i++) {
+      if (!usedSet.has(i)) queue.push(i);
+    }
+    // Fisher-Yates shuffle
+    for (let i = queue.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [queue[i], queue[j]] = [queue[j], queue[i]];
+    }
+    // If all used, reset
+    if (queue.length === 0) {
+      state.usedIndices = [];
+      state.doneCount = 0;
+      saveState(state);
+      buildQueue();
+    }
+  }
+  buildQueue();
+
+  // ── DOM refs ───────────────────────────────────────────────────────────────
+  const clipText    = document.getElementById('clip-text');
+  const copyBtn     = document.getElementById('copy-btn');
+  const btnIcon     = document.getElementById('btn-icon');
+  const btnLabel    = document.getElementById('btn-label');
+  const toast       = document.getElementById('toast');
+  const doneCount   = document.getElementById('done-count');
+  const totalCount  = document.getElementById('total-count');
+  const progressFill= document.getElementById('progress-fill');
+  const categoryTag = document.getElementById('category-tag');
+  const card        = document.getElementById('card');
+  const skipBtn     = document.getElementById('skip-btn');
+  const installBanner = document.getElementById('install-banner');
+  const installBtn  = document.getElementById('install-btn');
+  const dismissInstall = document.getElementById('dismiss-install');
+
+  totalCount.textContent = TOTAL;
+
+  // ── Render text with char animation ───────────────────────────────────────
+  let currentItem = null;
+
+  function getCategory(text) {
+    const words = text.trim().split(/\s+/);
+    if (words.length === 1) return 'WORD';
+    if (words.length <= 4) return 'PHRASE';
+    return 'SENTENCE';
+  }
+
+  function renderText(text, animate = true) {
+    if (!animate) {
+      clipText.textContent = text;
+      return;
+    }
+    clipText.innerHTML = '';
+    const chars = text.split('');
+    chars.forEach((ch, i) => {
+      const span = document.createElement('span');
+      span.className = 'char';
+      span.textContent = ch;
+      span.style.animationDelay = `${i * 18}ms`;
+      clipText.appendChild(span);
+    });
+  }
+
+  function nextItem(skipAnimation = false) {
+    if (queue.length === 0) { buildQueue(); }
+    const idx = queue.shift();
+    currentItem = allItems[idx];
+    state.currentIndex = idx;
+    saveState(state);
+
+    const cat = getCategory(currentItem);
+    categoryTag.textContent = cat;
+
+    if (!skipAnimation) {
+      // exit old text
+      clipText.classList.add('text-exiting');
+      setTimeout(() => {
+        clipText.classList.remove('text-exiting');
+        renderText(currentItem);
+      }, 280);
+    } else {
+      renderText(currentItem, false);
+    }
+  }
+
+  // ── Copy logic ─────────────────────────────────────────────────────────────
+  let copying = false;
+
+  function spawnParticles(x, y) {
+    const emojis = ['✦', '⋆', '◈', '◇', '✧', '◉'];
+    for (let i = 0; i < 8; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      p.style.left = x + 'px';
+      p.style.top  = y + 'px';
+      p.style.color = Math.random() > 0.5 ? '#c8ff00' : '#ff4ecd';
+      const angle = (Math.random() * 360) * Math.PI / 180;
+      const dist  = 40 + Math.random() * 80;
+      p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+      p.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 1050);
+    }
+  }
+
+  function addRipple(btn, e) {
+    const rect = btn.getBoundingClientRect();
+    const x = (e.clientX || rect.left + rect.width/2) - rect.left;
+    const y = (e.clientY || rect.top  + rect.height/2) - rect.top;
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple';
+    ripple.style.width = ripple.style.height = '60px';
+    ripple.style.left = (x - 30) + 'px';
+    ripple.style.top  = (y - 30) + 'px';
+    btn.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 600);
+  }
+
+  async function doCopy(e) {
+    if (copying || !currentItem) return;
+    copying = true;
+
+    addRipple(copyBtn, e || {});
+    if (e) spawnParticles(
+      (e.clientX || window.innerWidth/2),
+      (e.clientY || window.innerHeight/2)
+    );
+
+    // Try clipboard API
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(currentItem);
+      ok = true;
+    } catch(err) {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = currentItem;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try { ok = document.execCommand('copy'); } catch(e2) {}
+      ta.remove();
+    }
+
+    if (ok) {
+      // Mark used
+      state.usedIndices.push(state.currentIndex);
+      state.doneCount++;
+      saveState(state);
+
+      // UI feedback
+      copyBtn.classList.add('success');
+      card.classList.add('copying');
+      btnIcon.textContent = '✓';
+      btnLabel.textContent = 'COPIED!';
+
+      const pct = Math.round((state.doneCount / TOTAL) * 100);
+      progressFill.style.width = pct + '%';
+      doneCount.textContent = state.doneCount;
+
+      showToast('✓ Copied to clipboard!');
+
+      // After short delay, go to next
+      setTimeout(() => {
+        copyBtn.classList.remove('success');
+        card.classList.remove('copying');
+        btnIcon.textContent = '⎘';
+        btnLabel.textContent = 'COPY';
+        nextItem();
+        copying = false;
+      }, 700);
+    } else {
+      showToast('⚠ Copy failed — try again');
+      copying = false;
+    }
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
+  }
+
+  // ── Event listeners ────────────────────────────────────────────────────────
+  copyBtn.addEventListener('click', doCopy);
+
+  skipBtn.addEventListener('click', () => {
+    if (copying) return;
+    nextItem();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.key === 'c' || e.key === 'C') {
+      e.preventDefault();
+      doCopy();
+    }
+    if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
+      if (!copying) nextItem();
+    }
+  });
+
+  // Touch swipe to skip
+  let touchStartX = 0;
+  document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 60 && !copying) nextItem();
+  }, { passive: true });
+
+  // ── PWA Install ────────────────────────────────────────────────────────────
+  let deferredPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (!localStorage.getItem('install_dismissed')) {
+      setTimeout(() => installBanner.classList.add('show'), 3000);
+    }
+  });
+
+  installBtn.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    installBanner.classList.remove('show');
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+  });
+
+  dismissInstall.addEventListener('click', () => {
+    installBanner.classList.remove('show');
+    localStorage.setItem('install_dismissed', '1');
+  });
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  doneCount.textContent = state.doneCount;
+  const initPct = Math.round((state.doneCount / TOTAL) * 100);
+  progressFill.style.width = initPct + '%';
+
+  // Load current or next
+  nextItem(true);
+</script>
+</body>
+</html>

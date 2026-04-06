@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#07070d"/>
+  <rect x="40" y="40" width="432" height="432" rx="60" fill="#0f0f1a" stroke="rgba(200,255,0,0.3)" stroke-width="2"/>
+  <!-- Clipboard body -->
+  <rect x="140" y="160" width="232" height="260" rx="16" fill="none" stroke="#c8ff00" stroke-width="12"/>
+  <!-- Clipboard top clip -->
+  <rect x="200" y="130" width="112" height="48" rx="12" fill="#c8ff00"/>
+  <rect x="228" y="118" width="56" height="24" rx="8" fill="#0f0f1a"/>
+  <!-- Lines suggesting text -->
+  <rect x="172" y="230" width="168" height="10" rx="5" fill="rgba(200,255,0,0.5)"/>
+  <rect x="172" y="262" width="140" height="10" rx="5" fill="rgba(200,255,0,0.3)"/>
+  <rect x="172" y="294" width="156" height="10" rx="5" fill="rgba(200,255,0,0.2)"/>
+  <!-- Copy arrow -->
+  <path d="M340 330 L380 370 L340 410" stroke="#ff4ecd" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="300" y1="370" x2="380" y2="370" stroke="#ff4ecd" stroke-width="12" stroke-linecap="round"/>
+</svg>
